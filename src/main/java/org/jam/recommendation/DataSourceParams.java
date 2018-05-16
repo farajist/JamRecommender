@@ -3,6 +3,9 @@ package org.jam.recommendation;
 import org.apache.predictionio.core.EventWindow;
 import org.apache.predictionio.controller.Params;
 
+import java.util.ArrayList;
+
+
 
 /** Taken from engine.json these are passed in the DataSource constructor
  * @param appName registered name for the app
@@ -16,10 +19,10 @@ import org.apache.predictionio.controller.Params;
 
 public class DataSourceParams implements Params{
     private final String appName;
-    private final List<String> eventNames;
+    private final ArrayList<String> eventNames;
     private final EventWindow eventWindow;
 
-    public DataSourceParams(String appName, List<String> eventNames, EventWindow eventWindow) {
+    public DataSourceParams(String appName, ArrayList<String> eventNames, EventWindow eventWindow) {
         this.appName = appName;
         this.eventNames = eventNames;
         this.eventWindow = eventWindow;
@@ -29,8 +32,8 @@ public class DataSourceParams implements Params{
         return this.appName;
     }
 
-    public List<String> getEventNames() {
-        return this.appName;
+    public ArrayList<String> getEventNames() {
+        return this.eventNames;
     }
 
     public EventWindow getEventWindow() {

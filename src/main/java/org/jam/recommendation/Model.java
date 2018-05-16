@@ -14,7 +14,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
 
-public class Model implements Serializable, PersistentModel<AlgorithmParams> {
+public class Model implements Serializable, PersistentModel<JamAlgorithmParams> {
     private static final Logger logger = LoggerFactory.getLogger(Model.class);
     private final JavaPairRDD<Integer, double[]> userFeatures;
     private final JavaPairRDD<Integer, Tuple2<String, double[]>> indexItemFeatures;
@@ -57,7 +57,7 @@ public class Model implements Serializable, PersistentModel<AlgorithmParams> {
     }
 
     @Override
-    public boolean save(String id, AlgorithmParams params, SparkContext sc) {
+    public boolean save(String id, JamAlgorithmParams params, SparkContext sc) {
         userFeatures.saveAsObjectFile("/tmp/" + id + "/userFeatures");
         indexItemFeatures.saveAsObjectFile("/tmp/" + id + "/indexItemFeatures");
         userIndex.saveAsObjectFile("/tmp/" + id + "/userIndex");

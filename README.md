@@ -1,6 +1,6 @@
 # Recommendation engine based on Apache PredictionIO
 
-JamRecommender is an Apache PredictionIO-based product recommendation engine ... 
+Apache PredictionIO based product recommender using a blend of algorithms ... 
 
 still working on it :)
 ## Idea

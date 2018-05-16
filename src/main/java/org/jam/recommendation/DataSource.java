@@ -1,11 +1,13 @@
 package org.jam.recommendation;
 
 import grizzled.slf4j.Logger;
+import org.apache.predictionio.core.EventWindow;
+import org.apache.predictionio.core.SelfCleaningDataSource;
+import org.apache.predictionio.core.SelfCleaningDataSource$class;
+import org.apache.predictionio.data.storage.*;
 import org.slf4j.LoggerFactory;
 import org.apache.predictionio.controller.EmptyParams;
 import org.apache.predictionio.controller.java.PJavaDataSource;
-import org.apache.predictionio.data.storage.Event;
-import org.apache.predictionio.data.storage.PropertyMap;
 import org.apache.predictionio.data.store.java.OptionHelper;
 import org.apache.predictionio.data.store.java.PJavaEventStore;
 import org.apache.spark.SparkContext;
@@ -29,31 +31,32 @@ import java.util.stream.Collectors;
  * 
  */
 
-public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query, Set<String>> {
+public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query, Set<String>>
+        implements SelfCleaningDataSource {
 
     private final DataSourceParams dsp;
-    private final EventWindow eventWindow;
+//    private final EventWindow eventWindow;
     private transient PEvents pEventsDb = Storage.getPEvents();
-    private transient LEvents lEventsDb = Storage.getLEvents();
+    private transient LEvents lEventsDb = Storage.getLEvents(false);
 
     private final Logger logger = new Logger(LoggerFactory.getLogger(SelfCleaningDataSource.class));
     
     public DataSource(DataSourceParams dsp) {
         this.dsp = dsp;
 
-        drawInfo("Init DataSource", new List<Tuple2<String, String>>(
-            new Tuple2("══════════════════════════════", "════════════════════════════"),
-            new Tuple2("App name", getAppName()),
-            new Tuple2("Event window", getEventWindow()),
-            new Tuple2("Event names", getEventNames())
-        ));
+//        drawInfo("Init DataSource", new ArrayList<Tuple2<String, String>>(
+//            new Tuple2("══════════════════════════════", "════════════════════════════"),
+//            new Tuple2("App name", getAppName()),
+//            new Tuple2("Event window", getEventWindow()),
+//            new Tuple2("Event names", getEventNames())
+//        ));
     }
 
     public String getAppName() {
         return dsp.getAppName();
     }
 
-    public String getEventWindow() {
+    public EventWindow getEventWindow() {
         return dsp.getEventWindow();
     }
 
@@ -71,15 +74,15 @@ public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query
          * the event store
          **/
         JavaRDD<Event> eventsRDD = PJavaEventStore.find(
-            dsp.getAppName(),
-            OptionHelper.<String>none(),
-            OptionHelper.<DateTime>none(),
-            OptionHelper.<DateTime>none(),
-            OptionHelper.some("user"),
-            OptionHelper.<String>none(),
-            OptionHelper.some(dsp.getEventNames()),
-            OptionHelper.some(OptionHelper.some("item")),
-            OptionHelper.<Option<String>>none(),
+            dsp.getAppName(),                             //return event of this app
+            OptionHelper.<String>none(),                  //return event of this channel (default)
+            OptionHelper.<DateTime>none(),                //return events with eventTime >= this
+            OptionHelper.<DateTime>none(),                //return events with eventTime < this
+            OptionHelper.some("user"),                    //return events of this entity type
+            OptionHelper.<String>none(),                  //return events of this entity id 
+            OptionHelper.some(dsp.getEventNames()),       //return events with any any of this event names
+            OptionHelper.some(OptionHelper.some("item")), //return events on this target type
+            OptionHelper.<Option<String>>none(),          //return event on this id  (none == no restriction)
             sc
         );
 
@@ -91,9 +94,10 @@ public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query
                         eventsRDD.filter(event -> !event.entityId().isEmpty()
                                         && !event.targetEntityId().get().isEmpty()
                                         && eventName.equals(event.event()))
-                                    .map(event -> new Tuple2<String, String>(
+                                        .map(event -> new Tuple2<String, String>(
                                             event.entityId(),
                                             event.targetEntityId().get()));
+                        //NOTE: here we have it like (event => <user, item>) with all entites known
                         return new Tuple2<>(eventName, JavaPairRDD.fromJavaRDD(actionRDD));
                     })
                     .filter(pair -> !pair._2().isEmpty())
@@ -136,7 +140,7 @@ public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query
     }
 
     @Override
-    public RDDMEvent< getCleanedPEvents(RDD<Event> pEvents) {
+    public RDD<Event> getCleanedPEvents(RDD<Event> pEvents) {
         return SelfCleaningDataSource$class.getCleanedPEvents(this, pEvents);
     }
 
@@ -151,13 +155,13 @@ public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query
     }
 
     @Override
-    public Iterable<Event> removeLDupicates(<Iterable<Event> ls) {
-        return SelfCleaningDataSource$class.removeLDupicates(this, ls);
+    public Iterable<Event> removeLDuplicates(Iterable<Event> ls) {
+        return SelfCleaningDataSource$class.removeLDuplicates(this, ls);
     }
 
     @Override
     public void removeEvents(Set<String> eventsToRemove, int appId) {
-        return SelfCleaningDataSource$class.removeEvents(this, eventsToRemove, appId);
+        SelfCleaningDataSource$class.removeEvents(this, eventsToRemove, appId);
     }
 
     @Override
@@ -166,8 +170,13 @@ public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query
     }
 
     @Override
-    public RDD<Event> compressLProperties(Iterable<Event> events) {
-        return SelfCleaningDataSource$class.compressLProperties(this, sc, events);
+    public RDD<Event> removePDuplicates(SparkContext sc, RDD<Event> rdd) {
+        return SelfCleaningDataSource$class.removePDuplicates(this, sc, rdd);
+    }
+
+    @Override
+    public Iterable<Event> compressLProperties(Iterable<Event> events) {
+        return SelfCleaningDataSource$class.compressLProperties(this, events);
     }
 
     @Override
@@ -181,13 +190,17 @@ public class DataSource extends PJavaDataSource<TrainingData, EmptyParams, Query
     }
 
     @Override
+    public void removePEvents(RDD<String> eventsToRemove, int appId, SparkContext sc) {
+        SelfCleaningDataSource$class.removePEvents(this, eventsToRemove, appId, sc);
+    }
+    @Override
     public void wipe(Set<Event> newEvents, Set<String> eventsToRemove) {
         SelfCleaningDataSource$class.wipe(this, newEvents, eventsToRemove);
     }
 
     @Override
     public RDD<Event> cleanPEvents(SparkContext sc) {
-        return SelfCleaningDataSource$class.wipe(this, sc);
+        return SelfCleaningDataSource$class.cleanPEvents(this, sc);
     }
 
     @Override

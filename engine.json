@@ -4,18 +4,18 @@
   "engineFactory": "org.jam.recommendation.RecommendationEngine",
   "datasource": {
     "params" : {
-      "appName": "javadase"
+      "appName": "jamrec"
     }
   },
   "algorithms": [
     {
-      "name": "algo",
+      "name": "jam",
       "params": {
         "seed": 1,
         "rank": 10,
         "iteration": 10,
         "lambda": 0.01,
-        "appName": "javadase",
+        "appName": "jamrec",
         "similarItemEvents": ["view"],
         "seenItemEvents": ["buy", "view"],
         "unseenOnly": true
